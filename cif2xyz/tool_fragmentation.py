@@ -41,6 +41,43 @@ def max_distance(set1, set2):
 
     return max_distance_index, point1, point2, np.max(distances)
 
+def min_wrap_distance(set1, set2,lattice_vectors):
+    mindist = 10
+    coord1 = 0
+    coord2 = 0
+    for i in range(len(set1)):
+        for j in range(len(set2)):
+            point1 = set1[i]
+            point2 = set2[j]
+            #distance = point_B - point_A
+            #wrapped_distance = np.linalg.solve(box_vectors.T, distance.T).T
+            #wrapped_distance = np.round(wrapped_distance)
+
+            # Calculate fractional coordinates
+            fractional_point1 = np.linalg.solve(lattice_vectors.T, point1)
+            fractional_point2 = np.linalg.solve(lattice_vectors.T, point2)
+
+            # Calculate the real-space vector
+            real_space_vector = fractional_point2 - fractional_point1
+
+            # Apply minimum image convention
+            real_space_vector -= np.round(real_space_vector)
+
+            # Convert back to Cartesian coordinates
+            real_space_vector_cartesian = np.dot(real_space_vector, lattice_vectors)
+
+            # Calculate the distance
+            distance = np.linalg.norm(real_space_vector_cartesian)
+
+            # Calculate distance using Miller indices
+            if(distance < mindist):
+                mindist = distance
+                coord1 = point1
+                coord2 = point2
+
+    return coord1,coord2, mindist 
+
+
 
 def frag_unwarp(atoms):
 
@@ -85,43 +122,69 @@ def frag_unwarp(atoms):
         uf = groupSplit(LinkMat)
         MolRec = uf.components()
         nMol = len(MolRec) # nMol >1 means crossboundary.
+
         if (nMol > 1):
+            print('===============')
             coord_new = []
             # Define the box vectors (non-orthogonal)
             box_vectors = np.array(cell)
             # Define the coordinates of points A and B
             #coord_new.append(list(Coords[0]))
             coord_new = Coords
+
+            nMol_c = nMol
+            MolRec_c = MolRec
+            while(nMol_c>1):
            
-            imaxsub = None
-            maxsub = 0
-            for isub in MolRec:
-                if(len(isub)>maxsub):
-                    imaxsub = list(isub)
-                    maxsub = len(isub)
-            Coords_max = np.array(Coords)[imaxsub]
+                imaxsub = None
+                maxsub = 0
+                for isub in MolRec_c:
+                    if(len(isub)>maxsub):
+                        imaxsub = list(isub)
+                        maxsub = len(isub)
+                Coords_max = np.array(Coords)[imaxsub]
 
-            
-            for isub in MolRec:
-                if (imaxsub[0] in isub): continue
-                Coords_move = np.array(Coords)[list(isub)]
-                # Compute largest distance between 2 fragment.
-                idx,point_A,point_B,maxdist = max_distance(Coords_max, Coords_move) 
+                for isub in MolRec_c:
+                    if (imaxsub[0] in isub): continue
+                    Coords_move = np.array(Coords)[list(isub)]
+                    # Compute largest distance between 2 fragment.
+                    #idx,point_A,point_B,maxdist = max_distance(Coords_max, Coords_move)
+                    point_A,point_B,mindist = min_wrap_distance(Coords_max, Coords_move,box_vectors)
+                    print(Coords_max)
+                    print(Coords_move)
+                    print(mindist)
 
-                distance = point_B - point_A
-                wrapped_distance = np.linalg.solve(box_vectors.T, distance.T).T
-                wrapped_distance = np.round(wrapped_distance)
+                    distance = point_B - point_A
+                    wrapped_distance = np.linalg.solve(box_vectors.T, distance.T).T
+                    wrapped_distance = np.round(wrapped_distance)
 
-                # The move should based on the largest inter-atomic distanse
-                move = np.dot(wrapped_distance, box_vectors) 
+                    # The move should based on the largest inter-atomic distanse
+                    move = np.dot(wrapped_distance, box_vectors)
+                    print(move,point_B,point_A)
 
-                for iatom in isub:
-                    coord_new[iatom] = coord_new[iatom] - move 
-            # Change the coordinate of global 
+                    for iatom in isub:
+                        coord_new[iatom] = coord_new[iatom] - move 
+                # Change the coordinate of global 
+
+                # Check nMol aftermove:
+                subMol_c = Atoms(Elements,coord_new,cell=cell,pbc=True)
+                # Check is it cross boundary.
+                mask = BuildMaskForXYZ(Elements) 
+                distMat_c = subMol_c.get_all_distances(mic=False) 
+                LinkMat_c = distMat_c < mask
+                for i in range(len(Elements)):
+                    LinkMat_c[i][i] = False
+
+                uf_c = groupSplit(LinkMat_c)
+                MolRec_c = uf_c.components()
+                nMol_c = len(MolRec_c) # nMol >1 means crossboundary.
+                print(nMol,nMol_c)
+
             i = 0
             for iatm in imol:
                 position_list[iatm] = coord_new[i] 
                 i = i+1
+
         else:
             coord_new = Coords
 

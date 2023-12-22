@@ -44,8 +44,8 @@ def atomic_distance_mat(atom_coords, box_vectors):
 
 
 
-def main_cif2xyz(fileName):
-    structure = ase.io.read(fileName)
+def main_cif2xyz(directory, fileName):
+    structure = ase.io.read(directory+fileName)
 
     # Get coord and cell dimension.
     xyz_coords = structure.get_positions()
@@ -57,9 +57,10 @@ def main_cif2xyz(fileName):
     i = 0
     for imol in mols:
         subMol = Atoms(imol[0],imol[1],cell=cell,pbc=True)
-        ase.io.write('ag'+str(i)+'.xyz', subMol)
+        ase.io.write(directory+'mol'+str(i)+'.xyz', subMol)
         i=i+1
 
 
 if __name__ == '__main__':
-    main_cif2xyz('./example/CL20-TNT.cif')
+    #main_cif2xyz('./example/','CL20-TNT.cif')
+    main_cif2xyz('./example/','15.cif')
